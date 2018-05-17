@@ -104,17 +104,20 @@ def findLine(zeros, runs, data, nonZeroRuns):
         
         m = getSlope(x1, y1, x2, y2)
         
-        return [m, y1-m*x1]
-        
+        return [m, y1-m*x1]        
 
 def plotFit(data, numPeaks, useZeros):
 
-    #adjustment = min(data)
+    #Plot the data
+    plt.plot(data, '.', marker='o')
+
+    firstAdjustment = min(data)
+    normalizedAdjustment = 0
     #print "adjustment: " + str(adjustment)
 
     # Removing the pedestal
     # TODO: make this changeable
-    #data = array(map(lambda x: x-adjustment, data))
+    data = array(map(lambda x: x-firstAdjustment, data))
     
     numBucks = 10
     
@@ -122,15 +125,36 @@ def plotFit(data, numPeaks, useZeros):
     step = max(data) / numBucks
     
     bucketCount = defaultdict(int)
+    bucketContents = defaultdict(list)
+    buckets = [0 for i in xrange(0,len(data))]
     
-    for element in data:
-        bucketCount[getBucket(element,step)] += 1
+    for idx,element in enumerate(data):
+        bucket = getBucket(element,step)
+        bucketCount[bucket] += 1
+        bucketContents[bucket] += [idx]
+        buckets[idx] = bucket
     
     zeroBucket = max(bucketCount.iteritems(), key=operator.itemgetter(1))[0]
-    print "Bucket identified as the pedestal: " + str(zeroBucket)
+    #print "Bucket identified as the pedestal: " + str(zeroBucket)
+    
+    needsAdjustment = False
+    
+    for idx, bucket in enumerate(buckets):
+        if bucket < zeroBucket:
+            needsAdjustment = True
+            data[idx] = data[bucketContents[zeroBucket][0]]
+    
+    if needsAdjustment:
+        normalizedAdjustment = min(data[bucketContents[zeroBucket]])
+        data = array(map(lambda x: x-normalizedAdjustment, data))
+        step = max(data) / numBucks
+        
+    totalAdjustment = firstAdjustment + normalizedAdjustment
+        
+    print "adjustment: " + str(totalAdjustment)
 
     # I feel like I should rename this function to something less... runny
-    runs, zeros, nonZeroRuns = getRuns(data, step, zeroBucket)
+    runs, zeros, nonZeroRuns = getRuns(data, step, 0)
                 
     peaks, peakIdx = (getPeaks(data, numPeaks, nonZeroRuns) 
                         if not useZeros 
@@ -153,11 +177,9 @@ def plotFit(data, numPeaks, useZeros):
                   #for i in xrange(0,len(data))], '--')
 
     # This prints my vertical buckets
-    for i in xrange(1,numBucks):
-        plt.plot([i*step for _ in xrange(0, len(data))])
+    #for i in xrange(1,numBucks):
+        #plt.plot([i*step for _ in xrange(0, len(data))])
 
-    #Plot the data
-    plt.plot(data, '.', marker='o')
     x = range(0,len(data))
 
     popt, pcov = curve_fit(func, x, data, p0=guess,
@@ -168,19 +190,19 @@ def plotFit(data, numPeaks, useZeros):
 
     # Print and plot the optmized line fit
     print "line: " + "m = " + str(popt[0]) + ", b = " + str(popt[1])
-    plt.plot([popt[0]*j + popt[1] for j in xrange(0, len(data))], '--')
+    plt.plot([popt[0]*j + popt[1] + totalAdjustment for j in xrange(0, len(data))], '--')
     
     # Print and plot the optimized gaussian fit(s)
     for i in xrange(2, len(popt), 3):
         print ("gaussian " + str(i//3) + ": center = " + str(popt[i])
                + ", amplitude = " + str(popt[i+1]) + ", width = "
                + str(popt[i+2]))
-        plt.plot([gaussian(j, popt[i], popt[i + 2], popt[i + 1])
+        plt.plot([gaussian(j, popt[i], popt[i + 2], popt[i + 1]) + totalAdjustment
                  for j in xrange(0, len(data))], '--')
 
     fit = func(x, *popt)
 
-    plt.plot(fit, linewidth=2)
+    plt.plot(fit + totalAdjustment, linewidth=2)
 
     show()
 
@@ -251,7 +273,7 @@ def getRuns(data, step, zeroBuck):
 if __name__ == "__main__":
     # TODO: make loadable variable
     axdata = sio.loadmat('/home/physics/zacarias/gaussian/testData/'
-                         'XCorScan-MIRR_LR20_30_XCDL_MOTR-2018-03-20-072618.mat')
+                         'XCorScan-MIRR_LR20_30_XCDL_MOTR-2018-05-03-071728.mat')
 
     ampList = extract(axdata, 'ampList')
     
