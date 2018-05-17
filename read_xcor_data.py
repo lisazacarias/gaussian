@@ -13,6 +13,7 @@ import time
 from scipy.optimize import curve_fit
 import operator
 from numpy import inf
+from collections import defaultdict
 
 def extract(axdata, column):
     matLst = axdata['data'][column][0][0]
@@ -108,22 +109,33 @@ def findLine(zeros, runs, data, nonZeroRuns):
 
 def plotFit(data, numPeaks, useZeros):
 
-    adjustment = min(data)
-    print "adjustment: " + str(adjustment)
+    #adjustment = min(data)
+    #print "adjustment: " + str(adjustment)
 
     # Removing the pedestal
-    data = array(map(lambda x: x-adjustment, data))
+    # TODO: make this changeable
+    #data = array(map(lambda x: x-adjustment, data))
+    
+    numBucks = 10
     
     # Define the step size by the number of vertical buckets
-    step = max(data) / 10
+    step = max(data) / numBucks
+    
+    bucketCount = defaultdict(int)
+    
+    for element in data:
+        bucketCount[getBucket(element,step)] += 1
+    
+    zeroBucket = max(bucketCount.iteritems(), key=operator.itemgetter(1))[0]
+    print "Bucket identified as the pedestal: " + str(zeroBucket)
 
     # I feel like I should rename this function to something less... runny
-    runs, zeros, nonZeroRuns = getRuns(data, step)
+    runs, zeros, nonZeroRuns = getRuns(data, step, zeroBucket)
                 
     peaks, peakIdx = (getPeaks(data, numPeaks, nonZeroRuns) 
                         if not useZeros 
                         else getPeaks(data, numPeaks, runs))
-
+                        
     # This plots my guesses for the peaks
     # for idx in peakIdx:
     #     plt.axvline(x=idx)
@@ -141,8 +153,8 @@ def plotFit(data, numPeaks, useZeros):
                   #for i in xrange(0,len(data))], '--')
 
     # This prints my vertical buckets
-    # for i in xrange(1,10):
-    #     plt.plot([i*step for _ in xrange(0, len(data))])
+    for i in xrange(1,numBucks):
+        plt.plot([i*step for _ in xrange(0, len(data))])
 
     #Plot the data
     plt.plot(data, '.', marker='o')
@@ -160,7 +172,7 @@ def plotFit(data, numPeaks, useZeros):
     
     # Print and plot the optimized gaussian fit(s)
     for i in xrange(2, len(popt), 3):
-        print ("gaussian " + str(i/3) + ": center = " + str(popt[i])
+        print ("gaussian " + str(i//3) + ": center = " + str(popt[i])
                + ", amplitude = " + str(popt[i+1]) + ", width = "
                + str(popt[i+2]))
         plt.plot([gaussian(j, popt[i], popt[i + 2], popt[i + 1])
@@ -205,7 +217,7 @@ def getPeaks(data, numPeaks, runs):
 
 # Checking for inflection points doesn't work because some data points don't 
 # follow the trend line. This groups consecutive data points by bucket
-def getRuns(data, step):
+def getRuns(data, step, zeroBuck):
     zeros = []
     nonZeroRuns = []
     runs = []
@@ -222,7 +234,7 @@ def getRuns(data, step):
             # Three points make a curve!
             if len(currRun) > 2:
                 runs.append(currRun)
-                if currBuck == 0:
+                if currBuck <= zeroBuck:
                     zeros.append(len(runs)-1)
                 else:
                     nonZeroRuns.append(currRun)
@@ -238,15 +250,15 @@ def getRuns(data, step):
 
 if __name__ == "__main__":
     # TODO: make loadable variable
-    axdata = sio.loadmat('/home/physics/zacarias/gaussian/'
-                         'XCorScan-MIRR_LR20_30_XCDL_MOTR-2018-05-03-071728.mat')
+    axdata = sio.loadmat('/home/physics/zacarias/gaussian/testData/'
+                         'XCorScan-MIRR_LR20_30_XCDL_MOTR-2018-03-20-072618.mat')
 
-    posList = extract(axdata, 'posList')
+    ampList = extract(axdata, 'ampList')
     
     # These two might be unnecessary
-    ampList = extract(axdata, 'ampList')
+    posList = extract(axdata, 'posList')
     ampstdList = extract(axdata, 'ampstdList')
 
     # TODO: make loadable variable
-    numPeaks = 10
+    numPeaks = 3
     plotFit(ampList, numPeaks, False)
