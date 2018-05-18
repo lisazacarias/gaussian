@@ -1,3 +1,4 @@
+#!/usr/local/lcls/package/python/current/bin/python
 ################################################################################
 # Modified version of John Sheppard's read_xcor_data script
 # Reads in a matlab file of xcor data
@@ -14,6 +15,9 @@ from scipy.optimize import curve_fit
 import operator
 from numpy import inf
 from collections import defaultdict
+from sys import argv, exit
+
+NUM_BUCKS = 10
 
 def extract(axdata, column):
     matLst = axdata['data'][column][0][0]
@@ -60,8 +64,9 @@ def findWidths(peakIdxs, runs):
 def func(x, *params):
     m = params[0]
     b = params[1]
-    #y = np.zeros_like(x)
+
     y = [m*i + b for i in x]
+    
     for i in range(2, len(params), 3):
         ctr = params[i]
         amp = params[i+1]
@@ -92,6 +97,9 @@ def findLine(zeros, runs, data, nonZeroRuns):
         
     # 0 shouldn't be possible given that the data is normalized to the lowest 
     # point, so it should be 2+
+    # Currently just fitting the first point of the first zero run and the last
+    # point of the last zero run. Could make it smarter by adding a sum of step
+    # functions, but that seems like overkill
     else:
         zero1 = runs[zeros[0]]
         zero2 = runs[zeros[-1]]
@@ -106,107 +114,6 @@ def findLine(zeros, runs, data, nonZeroRuns):
         
         return [m, y1-m*x1]        
 
-def plotFit(data, numPeaks, useZeros):
-
-    #Plot the data
-    plt.plot(data, '.', marker='o')
-
-    firstAdjustment = min(data)
-    normalizedAdjustment = 0
-    #print "adjustment: " + str(adjustment)
-
-    # Removing the pedestal
-    # TODO: make this changeable
-    data = array(map(lambda x: x-firstAdjustment, data))
-    
-    numBucks = 10
-    
-    # Define the step size by the number of vertical buckets
-    step = max(data) / numBucks
-    
-    bucketCount = defaultdict(int)
-    bucketContents = defaultdict(list)
-    buckets = [0 for i in xrange(0,len(data))]
-    
-    for idx,element in enumerate(data):
-        bucket = getBucket(element,step)
-        bucketCount[bucket] += 1
-        bucketContents[bucket] += [idx]
-        buckets[idx] = bucket
-    
-    zeroBucket = max(bucketCount.iteritems(), key=operator.itemgetter(1))[0]
-    #print "Bucket identified as the pedestal: " + str(zeroBucket)
-    
-    needsAdjustment = False
-    
-    for idx, bucket in enumerate(buckets):
-        if bucket < zeroBucket:
-            needsAdjustment = True
-            data[idx] = data[bucketContents[zeroBucket][0]]
-    
-    if needsAdjustment:
-        normalizedAdjustment = min(data[bucketContents[zeroBucket]])
-        data = array(map(lambda x: x-normalizedAdjustment, data))
-        step = max(data) / numBucks
-        
-    totalAdjustment = firstAdjustment + normalizedAdjustment
-        
-    print "adjustment: " + str(totalAdjustment)
-
-    # I feel like I should rename this function to something less... runny
-    runs, zeros, nonZeroRuns = getRuns(data, step, 0)
-                
-    peaks, peakIdx = (getPeaks(data, numPeaks, nonZeroRuns) 
-                        if not useZeros 
-                        else getPeaks(data, numPeaks, runs))
-                        
-    # This plots my guesses for the peaks
-    # for idx in peakIdx:
-    #     plt.axvline(x=idx)
-
-    widths = findWidths(peakIdx, runs)
-
-    guess = findLine(zeros, runs, data, nonZeroRuns)
-    #guess = []
-    #plt.plot([guess[0]*j + guess[1] for j in xrange(0, len(data))], '--')
-
-    for idx, amp in enumerate(peaks):
-        guess += [peakIdx[idx], amp, widths[idx]/4]
-        # Plot my initial guesses
-        #plt.plot([gaussian(i, peakIdx[idx], widths[idx]/4, amp)
-                  #for i in xrange(0,len(data))], '--')
-
-    # This prints my vertical buckets
-    #for i in xrange(1,numBucks):
-        #plt.plot([i*step for _ in xrange(0, len(data))])
-
-    x = range(0,len(data))
-
-    popt, pcov = curve_fit(func, x, data, p0=guess,
-                           # Someday this feature will be available...
-                           # ...When we're no longer running builds from 2013 :P
-                           #bounds=(0, [len(data), max(data),len(data)]),
-                           maxfev=20000)
-
-    # Print and plot the optmized line fit
-    print "line: " + "m = " + str(popt[0]) + ", b = " + str(popt[1])
-    plt.plot([popt[0]*j + popt[1] + totalAdjustment for j in xrange(0, len(data))], '--')
-    
-    # Print and plot the optimized gaussian fit(s)
-    for i in xrange(2, len(popt), 3):
-        print ("gaussian " + str(i//3) + ": center = " + str(popt[i])
-               + ", amplitude = " + str(popt[i+1]) + ", width = "
-               + str(popt[i+2]))
-        plt.plot([gaussian(j, popt[i], popt[i + 2], popt[i + 1]) + totalAdjustment
-                 for j in xrange(0, len(data))], '--')
-
-    fit = func(x, *popt)
-
-    plt.plot(fit + totalAdjustment, linewidth=2)
-
-    show()
-
-
 def getPeaks(data, numPeaks, runs):
     # Should be doable in preprocessing
     lenRuns = [len(run) for run in runs]
@@ -214,7 +121,7 @@ def getPeaks(data, numPeaks, runs):
     # User-proofing. Could probably limit input
     numPeaks = numPeaks if numPeaks <= len(runs) else len(runs)
     
-    # Would be using linear argpartsort if we were running not 2013 builds
+    # Would be using linear argpartsort if we were running not 2013 builds.
     # Can you tell I'm bitter?
     ind = np.argsort(array(lenRuns))[-numPeaks:]
 
@@ -229,6 +136,8 @@ def getPeaks(data, numPeaks, runs):
 
     max_index, max_value = max(enumerate(data), key=operator.itemgetter(1))
 
+    # Maybe unnecessary precaution to make sure that the max point is used in
+    # the fit (a run wouldn't be found if the peak were sufficiently narrow)
     if max_value not in peaks:
         min_index, _ = min(enumerate(peaks), key=operator.itemgetter(1))
         peaks[min_index] = max_value
@@ -238,13 +147,15 @@ def getPeaks(data, numPeaks, runs):
 
 
 # Checking for inflection points doesn't work because some data points don't 
-# follow the trend line. This groups consecutive data points by bucket
-def getRuns(data, step, zeroBuck):
+# follow the trend line. This groups consecutive data points by bucket.
+# Buckets need to be recalculated following an adjustment.
+def getRuns(data, step):
     zeros = []
     nonZeroRuns = []
     runs = []
     currRun = []
     currBuck = getBucket(data[0], step)
+    
     for idx, point in enumerate(data):
         newBuck = getBucket(point, step)
         if newBuck == currBuck:
@@ -256,31 +167,158 @@ def getRuns(data, step, zeroBuck):
             # Three points make a curve!
             if len(currRun) > 2:
                 runs.append(currRun)
-                if currBuck <= zeroBuck:
+                if currBuck == 0:
                     zeros.append(len(runs)-1)
                 else:
                     nonZeroRuns.append(currRun)
 
             currRun = [idx]
             currBuck = newBuck
+            
+    # Effectively flushing the cache
     if len(currRun) > 2:
         runs.append(currRun)
         if currBuck == 0:
             zeros.append(len(runs)-1)
     return [runs, zeros, nonZeroRuns]
+    
+# A whole rigmarole to collapse multiple pedestals.
+# It assumes that the pedestal is the bucket with the most elements
+def adjustData(data, step, normalizedAdjustment):
+    bucketCount = defaultdict(int)
+    bucketContents = defaultdict(list)
+    buckets = [0 for i in xrange(0,len(data))]
+    
+    for idx,element in enumerate(data):
+        bucket = getBucket(element, step)
+        bucketCount[bucket] += 1
+        bucketContents[bucket] += [idx]
+        buckets[idx] = bucket
+    
+    zeroBucket = max(bucketCount.iteritems(), key=operator.itemgetter(1))[0]
+    
+    needsAdjustment = False
+    
+    for idx, bucket in enumerate(buckets):
+        if bucket < zeroBucket:
+            # Inefficient to set this every time, but eh
+            needsAdjustment = True
+            # Sets them arbitrarily to the value of the first element in the
+            # zero bucket, to eliminate the double pedestal
+            data[idx] = data[bucketContents[zeroBucket][0]]
+    
+    if needsAdjustment:
+        normalizedAdjustment = min(data[bucketContents[zeroBucket]])
+        data = array(map(lambda x: x-normalizedAdjustment, data))
+        step = max(data) / NUM_BUCKS
+    
+    return [data, step, normalizedAdjustment]
+    
+def getGuess(data, step, useZeros):
+    # I feel like I should rename this function to something less... runny
+    runs, zeros, nonZeroRuns = getRuns(data, step)
+                
+    peaks, peakIdx = (getPeaks(data, numPeaks, nonZeroRuns) 
+                        if not useZeros 
+                        else getPeaks(data, numPeaks, runs))
+                        
+    # This plots my guesses for the peaks
+    #for idx in peakIdx:
+    #    plt.axvline(x=idx)
 
+    widths = findWidths(peakIdx, runs)
+    
+    guess = findLine(zeros, runs, data, nonZeroRuns)
+    # This plots my guess for the line
+    #plt.plot([guess[0]*j + guess[1] for j in xrange(0, len(data))], '--')
+
+    for idx, amp in enumerate(peaks):
+        guess += [peakIdx[idx], amp, widths[idx]/4]
+        # Plot my initial guesses for the gaussian(s)
+        #plt.plot([gaussian(i, peakIdx[idx], widths[idx]/4, amp)
+                  #for i in xrange(0,len(data))], '--')
+    
+    return guess
+
+def plotFit(data, numPeaks, useZeros):
+
+    #Plot the data
+    plt.plot(data, '.', marker='o')
+
+    firstAdjustment = min(data)
+    normalizedAdjustment = 0
+
+    # Removing the pedestal
+    data = array(map(lambda x: x-firstAdjustment, data))
+    
+    
+    # Define the step size by the number of vertical buckets
+    step = max(data) / NUM_BUCKS
+    
+    data, step, normalizedAdjustment = adjustData(data, step, 
+                                                  normalizedAdjustment)
+                                                  
+    # This prints my vertical buckets
+    #for i in xrange(1,NUM_BUCKS):
+        #plt.plot([i*step for _ in xrange(0, len(data))])
+        
+    totalAdjustment = firstAdjustment + normalizedAdjustment
+        
+    print "adjustment: " + str(totalAdjustment)
+
+    # Note that the format of the guess is a list of the form:
+    # [m, b, center_0, amplitude_0, width_0,..., center_k, amplitude_k, width_k]
+    # where m and b correspond to the line parameters in y = m*x + b
+    # and every following group of three corresponds to a gaussian 
+    guess = getGuess(data, step, useZeros)
+
+    x = range(0,len(data))
+
+    popt, pcov = curve_fit(func, x, data, p0=guess,
+                           # Someday this feature will be available...
+                           # ...When we're no longer running builds from 2013 :P
+                           #bounds=(0, [len(data), max(data),len(data)]),
+                           maxfev=20000)
+                           
+
+    # Print and plot the optmized line fit.
+    # Note that popt has the same format as the guess, meaning that the first
+    # two parameters are the m and b of the line, respectively
+    print "line: " + "m = " + str(popt[0]) + ", b = " + str(popt[1])
+    plt.plot([popt[0]*j + popt[1] + totalAdjustment 
+             for j in xrange(0, len(data))], '--')
+    
+    # Print and plot the optimized gaussian fit(s)
+    # Again, the first two elements were the line, and each gaussian is a
+    # subsequent group of 3 elements (hence starting at index 2 and incrementing
+    # by 3)
+    for i in xrange(2, len(popt), 3):
+        print ("gaussian " + str(i//3) + ": center = " + str(popt[i])
+               + ", amplitude = " + str(popt[i+1]) + ", width = "
+               + str(popt[i+2]))
+        plt.plot([gaussian(j, popt[i], popt[i + 2], popt[i + 1])
+                 + totalAdjustment for j in xrange(0, len(data))], '--')
+
+    fit = func(x, *popt)
+
+    plt.plot(fit + totalAdjustment, linewidth=2)
+
+    show()
 
 if __name__ == "__main__":
-    # TODO: make loadable variable
-    axdata = sio.loadmat('/home/physics/zacarias/gaussian/testData/'
-                         'XCorScan-MIRR_LR20_30_XCDL_MOTR-2018-05-03-071728.mat')
+    try:
+        filepath = argv[1]
+    except IndexError:
+        print "Usage: " + argv[0] + " [path to XCor matlab file]"
+        exit()
+        
+    axdata = sio.loadmat(filepath)
 
     ampList = extract(axdata, 'ampList')
     
-    # These two might be unnecessary
-    posList = extract(axdata, 'posList')
-    ampstdList = extract(axdata, 'ampstdList')
+    # TODO: Ask Axel if he needs these
+    #posList = extract(axdata, 'posList')
+    #ampstdList = extract(axdata, 'ampstdList')
 
-    # TODO: make loadable variable
-    numPeaks = 3
+    numPeaks = input("Number of gaussians to fit: ")
     plotFit(ampList, numPeaks, False)
