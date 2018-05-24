@@ -180,6 +180,7 @@ def getRuns(data, step):
         runs.append(currRun)
         if currBuck == 0:
             zeros.append(len(runs)-1)
+            
     return [runs, zeros, nonZeroRuns]
     
 # A whole rigmarole to collapse multiple pedestals.
@@ -209,7 +210,7 @@ def adjustData(data, step, normalizedAdjustment):
     
     if needsAdjustment:
         normalizedAdjustment = min(data[bucketContents[zeroBucket]])
-        data = array(map(lambda x: x-normalizedAdjustment, data))
+        data = data - normalizedAdjustment
         step = max(data) / NUM_BUCKS
     
     return [data, step, normalizedAdjustment]
@@ -249,8 +250,7 @@ def plotFit(data, numPeaks, useZeros):
     normalizedAdjustment = 0
 
     # Removing the pedestal
-    data = array(map(lambda x: x-firstAdjustment, data))
-    
+    data = data - firstAdjustment
     
     # Define the step size by the number of vertical buckets
     step = max(data) / NUM_BUCKS
