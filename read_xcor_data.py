@@ -241,10 +241,7 @@ def getGuess(data, step, useZeros):
     
     return guess
 
-def plotFit(data, numPeaks, useZeros):
-
-    #Plot the data
-    plt.plot(data, '.', marker='o')
+def getFit(data, numPeaks, useZeros, x):
 
     firstAdjustment = min(data)
     normalizedAdjustment = 0
@@ -263,8 +260,6 @@ def plotFit(data, numPeaks, useZeros):
         #plt.plot([i*step for _ in xrange(0, len(data))])
         
     totalAdjustment = firstAdjustment + normalizedAdjustment
-        
-    print "adjustment: " + str(totalAdjustment)
 
     # Note that the format of the guess is a list of the form:
     # [m, b, center_0, amplitude_0, width_0,..., center_k, amplitude_k, width_k]
@@ -272,21 +267,21 @@ def plotFit(data, numPeaks, useZeros):
     # and every following group of three corresponds to a gaussian 
     guess = getGuess(data, step, useZeros)
 
-    x = range(0,len(data))
-
-    popt, pcov = curve_fit(func, x, data, p0=guess,
+    return [curve_fit(func, x, data, p0=guess,
                            # Someday this feature will be available...
                            # ...When we're no longer running builds from 2013 :P
                            #bounds=(0, [len(data), max(data),len(data)]),
-                           maxfev=20000)
-                           
+                           maxfev=20000)[0], totalAdjustment]
 
+def plotFit(popt, totalAdjustment, x):
+    
+    print "adjustment: " + str(totalAdjustment)
+                           
     # Print and plot the optmized line fit.
     # Note that popt has the same format as the guess, meaning that the first
     # two parameters are the m and b of the line, respectively
     print "line: " + "m = " + str(popt[0]) + ", b = " + str(popt[1])
-    plt.plot([popt[0]*j + popt[1] + totalAdjustment 
-             for j in xrange(0, len(data))], '--')
+    plt.plot([popt[0]*j + popt[1] + totalAdjustment for j in x], '--')
     
     # Print and plot the optimized gaussian fit(s)
     # Again, the first two elements were the line, and each gaussian is a
@@ -297,7 +292,7 @@ def plotFit(data, numPeaks, useZeros):
                + ", amplitude = " + str(popt[i+1]) + ", width = "
                + str(popt[i+2]))
         plt.plot([gaussian(j, popt[i], popt[i + 2], popt[i + 1])
-                 + totalAdjustment for j in xrange(0, len(data))], '--')
+                 + totalAdjustment for j in x], '--')
 
     fit = func(x, *popt)
 
@@ -321,4 +316,12 @@ if __name__ == "__main__":
     #ampstdList = extract(axdata, 'ampstdList')
 
     numPeaks = input("Number of gaussians to fit: ")
-    plotFit(ampList, numPeaks, False)
+    
+    x = range(0, len(ampList))
+    
+    #Plot the data
+    plt.plot(ampList, '.', marker='o')
+    
+    popt, totalAdjustment = getFit(ampList, numPeaks, False, x)
+    
+    plotFit(popt, totalAdjustment, x)
