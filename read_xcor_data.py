@@ -7,14 +7,11 @@
 
 from __future__ import division
 
-from pylab import *
-from scipy import special
+from pylab import array, plt, floor, show
+from numpy import argsort, power, exp
 import scipy.io as sio
-import time
 from scipy.optimize import curve_fit
-import operator
-from numpy import inf
-from collections import defaultdict
+from operator import itemgetter
 from sys import argv, exit
 
 NUM_BUCKS = 10
@@ -30,32 +27,28 @@ def getBucket(val, step):
     bucket = int(floor(val/step))
     return bucket if bucket < 10 else 9
 
-# There has to be a more efficient way of doing this, I'm just tired
 def findMax(data, run):
-    max = 0
-    maxIdx = run[0]
-    for idx in run:
-        val = data[idx]
-        if val > max:
-            max = val
-            maxIdx = idx
-    return maxIdx
+    max_index = max(enumerate(data[run]), key=itemgetter(1))[0]
+    return run[max_index]
 
-# This can probably be done in preprocessing
-# The ever-present struggle between speed and space
-def findRun(idx, runs):
-    for i, run in enumerate(runs):
-        if idx in run:
-            return i
-
-def findWidths(peakIdxs, runs):
+# The very ham-fisted way I'm coming up with a guess for the width at a given
+# peak is to get the literal distance between the first element of the
+# subsequent run and the last element of the previous run
+def findWidths(peakIdxs, runs, runMap):
     widths = []
     for peakIdx in peakIdxs:
-        runIdx = findRun(peakIdx, runs)
+        runIdx = runMap[peakIdx]
+
+        # If it's the first run, just double the distance between the peak and
+        # the first element of the next run
         if runIdx == 0:
             widths.append((runs[1][0] - peakIdx)*2)
+        
+        # If it's the last run, just double the distance between the peak and
+        # the last element of the previous run
         elif runIdx == len(runs)-1:
             widths.append((peakIdx - runs[-2][-1])*2)
+        
         else:
             widths.append(runs[runIdx+1][0] - runs[runIdx-1][-1])
     return widths
@@ -75,7 +68,7 @@ def func(x, *params):
     return y
 
 def gaussian(x, mu, sig, amp):
-    return amp*np.exp(-np.power(x - mu, 2.) / (2 * np.power(sig, 2.)))
+    return amp*exp(-power(x - mu, 2.) / (2 * power(sig, 2.)))
     
 def getSlope(x1, y1, x2, y2):
     return (y2-y1)/(x2-x1)
@@ -104,10 +97,10 @@ def findLine(zeros, runs, data, nonZeroRuns):
         zero1 = runs[zeros[0]]
         zero2 = runs[zeros[-1]]
         
-        x1 = zero1[np.argsort(data[zero1])[len(zero1)/2]]
+        x1 = zero1[argsort(data[zero1])[len(zero1)/2]]
         y1 = data[x1]
         
-        x2 = zero2[np.argsort(data[zero2])[len(zero2)/2]]
+        x2 = zero2[argsort(data[zero2])[len(zero2)/2]]
         y2 = data[x2]
         
         m = getSlope(x1, y1, x2, y2)
@@ -116,30 +109,28 @@ def findLine(zeros, runs, data, nonZeroRuns):
 
 def getPeaks(data, numPeaks, runs):
     # Should be doable in preprocessing
-    lenRuns = [len(run) for run in runs]
+    lenRuns = map(lambda run: len(run), runs)
     
     # User-proofing. Could probably limit input
     numPeaks = numPeaks if numPeaks <= len(runs) else len(runs)
     
     # Would be using linear argpartsort if we were running not 2013 builds.
     # Can you tell I'm bitter?
-    ind = np.argsort(array(lenRuns))[-numPeaks:]
+    ind = argsort(array(lenRuns))[-numPeaks:]
 
     # This is inelegant
-    peakIdx = []
+    peakIdx, peaks = ([],[])
     for run in array(runs)[ind]:
-        peakIdx.append(findMax(data, run))
-
-    peaks = []
-    for idx in peakIdx:
+        idx = findMax(data, run)
+        peakIdx.append(idx)
         peaks.append(data[idx])
 
-    max_index, max_value = max(enumerate(data), key=operator.itemgetter(1))
+    max_index, max_value = max(enumerate(data), key=itemgetter(1))
 
     # Maybe unnecessary precaution to make sure that the max point is used in
     # the fit (a run wouldn't be found if the peak were sufficiently narrow)
     if max_value not in peaks:
-        min_index, _ = min(enumerate(peaks), key=operator.itemgetter(1))
+        min_index = min(enumerate(peaks), key=itemgetter(1))[0]
         peaks[min_index] = max_value
         peakIdx[min_index] = max_index
 
@@ -147,13 +138,10 @@ def getPeaks(data, numPeaks, runs):
 
 
 # Checking for inflection points doesn't work because some data points don't 
-# follow the trend line. This groups consecutive data points by bucket.
+# follow the trend line; this groups consecutive data points by bucket.
 # Buckets need to be recalculated following an adjustment.
 def getRuns(data, step):
-    zeros = []
-    nonZeroRuns = []
-    runs = []
-    currRun = []
+    zeros, nonZeroRuns, runs, currRun, runMap = ([], [], [], [], [])
     currBuck = getBucket(data[0], step)
     
     for idx, point in enumerate(data):
@@ -174,6 +162,7 @@ def getRuns(data, step):
 
             currRun = [idx]
             currBuck = newBuck
+        runMap.append(len(runs)-1)
             
     # Effectively flushing the cache
     if len(currRun) > 2:
@@ -181,13 +170,14 @@ def getRuns(data, step):
         if currBuck == 0:
             zeros.append(len(runs)-1)
             
-    return [runs, zeros, nonZeroRuns]
+    return [runs, zeros, nonZeroRuns, runMap]
     
 # A whole rigmarole to collapse multiple pedestals.
 # It assumes that the pedestal is the bucket with the most elements
 def adjustData(data, step, normalizedAdjustment):
-    bucketCount = defaultdict(int)
-    bucketContents = defaultdict(list)
+
+    bucketCount = [0 for i in xrange(0, NUM_BUCKS)]
+    bucketContents = [[] for i in xrange(0, NUM_BUCKS)]
     buckets = [0 for i in xrange(0,len(data))]
     
     for idx,element in enumerate(data):
@@ -196,7 +186,7 @@ def adjustData(data, step, normalizedAdjustment):
         bucketContents[bucket] += [idx]
         buckets[idx] = bucket
     
-    zeroBucket = max(bucketCount.iteritems(), key=operator.itemgetter(1))[0]
+    zeroBucket = max(enumerate(bucketCount), key=itemgetter(1))[0]
     
     needsAdjustment = False
     
@@ -217,7 +207,7 @@ def adjustData(data, step, normalizedAdjustment):
     
 def getGuess(data, step, useZeros):
     # I feel like I should rename this function to something less... runny
-    runs, zeros, nonZeroRuns = getRuns(data, step)
+    runs, zeros, nonZeroRuns, runMap = getRuns(data, step)
                 
     peaks, peakIdx = (getPeaks(data, numPeaks, nonZeroRuns) 
                         if not useZeros 
@@ -227,7 +217,7 @@ def getGuess(data, step, useZeros):
     #for idx in peakIdx:
     #    plt.axvline(x=idx)
 
-    widths = findWidths(peakIdx, runs)
+    widths = findWidths(peakIdx, runs, runMap)
     
     guess = findLine(zeros, runs, data, nonZeroRuns)
     # This plots my guess for the line
@@ -308,7 +298,6 @@ if __name__ == "__main__":
         exit()
         
     axdata = sio.loadmat(filepath)
-
     ampList = extract(axdata, 'ampList')
     
     # TODO: Ask Axel if he needs these
