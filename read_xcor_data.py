@@ -104,6 +104,8 @@ def findLine(zeros, runs, data):
         
         return [m, y1-m*x1]        
 
+# Every run has the potential to be a peak, but we limit it to the numPeaks
+# largest ones
 def getPeaks(data, numPeaks, runs):
     # Should be doable in preprocessing
     lenRuns = map(lambda run: len(run), runs)
@@ -276,11 +278,9 @@ def processData(data):
     return [data, totalAdjustment, step]
 
 def getFit(data, x, guess):
-    return curve_fit(func, x, data, p0=guess
-                     # Someday this feature will be available...
-                     # ...When we're no longer running builds from 2013 :P
-                     #bounds=(0, [len(data), max(data),len(data)]),
-                     )[0]
+    # Someday the ability to bound the fit will be available...
+    # ...When we're no longer running builds from 2013 :P
+    return curve_fit(func, x, data, p0=guess)[0]
 
 def plotFit(popt, totalAdjustment, x, isGuess):
     
@@ -351,5 +351,5 @@ if __name__ == "__main__":
         checkBounds(popt, data, x)
         plotFit(popt, totalAdjustment, x, False)
     except (RuntimeError, AssertionError):
-        print "Could not optimize, so returning guess"
+        print "Could not optimize - returning guess"
         plotFit(guess, totalAdjustment, x, True)
