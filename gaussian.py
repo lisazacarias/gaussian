@@ -18,20 +18,23 @@ class GaussianUi(QtGui.QMainWindow):
         self.ui.setupUi(self)
         
         self.ui.uploadButton.pressed.connect(self.getData)
-        
         self.ui.numFits.activated.connect(self.updateGuess)
-        
-        self.ui.filterPedestal.setVisible(False)
+        self.ui.guessToEdit.activated.connect(self.updateGuessToEdit)
         self.ui.filterPedestal.stateChanged.connect(self.setUseZeros)
-        
         self.ui.getFitButton.pressed.connect(self.getFit)
         
-        self.axes = self.ui.gaussPlot.canvas.fig.add_subplot(111,axisbg='white')
-        
+        self.axes = self.ui.gaussPlot.canvas.fig.add_subplot(111, axisbg='white')
         self.useZeros = not self.ui.filterPedestal.isChecked()
         
         self.changeStates(False)
+        self.ui.filterPedestal.setVisible(False)
         
+    def updateGuessToEdit(self):
+        gauss = int(self.ui.guessToEdit.currentText())
+        self.ui.heightSlider.setSliderPosition(1000*self.guess[3 + 3*gauss])
+        self.ui.centerSlider.setSliderPosition(self.guess[2 + 3*gauss])
+        self.ui.widthSlider.setSliderPosition(self.guess[4 + 3*gauss])
+    
     def changeStates(self, isEnabled):
         self.ui.numFits.setEnabled(isEnabled)
         self.ui.filterPedestal.setEnabled(isEnabled)
@@ -59,6 +62,7 @@ class GaussianUi(QtGui.QMainWindow):
         self.getGuess()
         self.updateOptions(self.ui.guessToEdit, 0, 
                            int(self.ui.numFits.currentText()))
+        self.updateGuessToEdit()
     
     def cleanAndPlotData(self):
         self.ui.results.clear()
@@ -124,7 +128,7 @@ class GaussianUi(QtGui.QMainWindow):
     
     def populateSliders(self):
         self.ui.centerSlider.setRange(0, len(self.data))
-        self.ui.heightSlider.setRange(0, max(self.data))
+        self.ui.heightSlider.setRange(0, 1000*max(self.data))
         self.ui.widthSlider.setRange(1, len(self.data)//2)
     
     def getData(self):
@@ -143,6 +147,7 @@ class GaussianUi(QtGui.QMainWindow):
                                int(self.ui.numFits.currentText()))
             self.changeStates(True)
             self.populateSliders()
+            self.updateGuessToEdit()
                 
         # Handle case where user cancels file selection
         except IOError:
