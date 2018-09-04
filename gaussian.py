@@ -1,4 +1,4 @@
-from gaussian_ui import Ui_MainWindow
+from gaussian_ui import Ui_XCORGaussianFit
 from PyQt4 import QtGui, QtCore
 
 from pylab import array, plt, floor, show
@@ -14,7 +14,7 @@ from read_xcor_data import *
 class GaussianUi(QtGui.QMainWindow):
     def __init__(self):
         QtGui.QMainWindow.__init__(self)
-        self.ui = Ui_MainWindow()
+        self.ui = Ui_XCORGaussianFit()
         self.ui.setupUi(self)
         
         self.ui.uploadButton.pressed.connect(self.getData)
@@ -74,21 +74,6 @@ class GaussianUi(QtGui.QMainWindow):
         comboBox.clear()
         for i in xrange(start, end):
             comboBox.addItem(str(i))
-    
-    def updateNumFitsOptions(self):
-        self.ui.numFits.setCurrentIndex(0)
-        self.ui.guessToEdit.setCurrentIndex(0)
-            
-        self.cleanAndPlotData()
-        
-        self.ui.numFits.clear()
-        self.ui.guessToEdit.clear()
-        
-        for i in xrange(1, self.potentialPeaks + 1):
-            self.ui.numFits.addItem(str(i))
-            
-        for i in xrange(0, self.potentialPeaks):
-            self.ui.guessToEdit.addItem(str(i))
         
     def plotFit(self, popt, isGuess):
         self.colors = []

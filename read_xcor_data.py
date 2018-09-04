@@ -160,7 +160,8 @@ def getRuns(data, step):
             currRun.append(idx)
         else:
             # Plotting the end of a run
-            # plt.axvline(x=idx)
+            if DEBUG:
+                plt.axvline(x=idx)
             
             # Three points make a curve!
             if len(currRun) > 2:
@@ -250,20 +251,25 @@ def getGuess(data, step, useZeros, numPeaks):
             runs[runMap[maxIdx]].append(maxIdx)
                         
     # This plots my guesses for the peaks
-    #for idx in peakIdx:
-    #    plt.axvline(x=idx)
+    if DEBUG:
+        for idx in peakIdx:
+            plt.axvline(x=idx)
 
     widths = findWidths(peakIdx, runs, runMap)
     
     guess = findLine(zeroRuns, runs, data)
+    
     # This plots my guess for the line
-    #plt.plot([guess[0]*j + guess[1] for j in xrange(0, len(data))], '--')
+    if DEBUG:
+        plt.plot([guess[0]*j + guess[1] for j in xrange(0, len(data))], '--')
 
     for idx, amp in enumerate(peaks):
         guess += [peakIdx[idx], amp, widths[idx]/4]
+        
         # Plot my initial guesses for the gaussian(s)
-        #plt.plot([gaussian(i, peakIdx[idx], widths[idx]/4, amp)
-                  #for i in xrange(0,len(data))], '--')
+        if DEBUG:
+            plt.plot([gaussian(i, peakIdx[idx], widths[idx]/4, amp)
+                    for i in xrange(0,len(data))], '--')
     
     return [guess, len(runs) if useZeros else len(nonZeroRuns)]
     
@@ -279,8 +285,9 @@ def processData(data):
     data, step, normalizedAdjustment = adjustData(data, step)
                                                   
     # This prints my vertical buckets
-    #for i in xrange(1,NUM_BUCKS):
-        #plt.plot([i*step for _ in xrange(0, len(data))])
+    if DEBUG:
+        for i in xrange(1, NUM_BUCKS):
+            plt.plot([i*step for _ in xrange(0, len(data))])
         
     totalAdjustment = firstAdjustment + normalizedAdjustment
     
