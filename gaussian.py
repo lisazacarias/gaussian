@@ -1,3 +1,5 @@
+from __future__ import division
+
 from gaussian_ui import Ui_XCORGaussianFit
 from PyQt4 import QtGui, QtCore
 
@@ -22,6 +24,9 @@ class GaussianUi(QtGui.QMainWindow):
         self.ui.guessToEdit.activated.connect(self.updateGuessToEdit)
         self.ui.filterPedestal.stateChanged.connect(self.setUseZeros)
         self.ui.getFitButton.pressed.connect(self.getFit)
+        self.ui.heightSlider.valueChanged.connect(self.changeGaussAmp)
+        self.ui.centerSlider.valueChanged.connect(self.changeGaussCenter)
+        self.ui.widthSlider.valueChanged.connect(self.changeGaussWidth)
         
         self.axes = self.ui.gaussPlot.canvas.fig.add_subplot(111, axisbg='white')
         self.useZeros = not self.ui.filterPedestal.isChecked()
@@ -29,6 +34,22 @@ class GaussianUi(QtGui.QMainWindow):
         self.changeStates(False)
         self.ui.filterPedestal.setVisible(False)
         
+    def changeGaussParam(self, offset, val):
+        gauss = int(self.ui.guessToEdit.currentText())
+        self.guess[offset + 3*gauss] = val
+        self.cleanAndPlotData()
+        self.ui.results.append("----------GUESS----------")
+        self.plotFit(self.guess, True)
+    
+    def changeGaussAmp(self):
+        self.changeGaussParam(3, int(self.ui.heightSlider.value())/1000)
+        
+    def changeGaussCenter(self):
+        self.changeGaussParam(2, int(self.ui.centerSlider.value()))
+        
+    def changeGaussWidth(self):
+        self.changeGaussParam(4, int(self.ui.widthSlider.value()))
+    
     def updateGuessToEdit(self):
         gauss = int(self.ui.guessToEdit.currentText())
         self.ui.heightSlider.setSliderPosition(1000*self.guess[3 + 3*gauss])
@@ -77,28 +98,33 @@ class GaussianUi(QtGui.QMainWindow):
         
     def plotFit(self, popt, isGuess):
         self.colors = []
+        self.gaussPlots = []
     
         self.ui.results.append("adjustment: " + str(self.totalAdjustment))
                                
         # Print and plot the optmized line fit.
         # Note that popt has the same format as the guess, meaning that the first
         # two parameters are the m and b of the line, respectively
-        self.ui.results.append("line: " + "m = " + str(popt[0]) + ", b = " + str(popt[1]))
-        color = self.axes.plot([popt[0]*j + popt[1] + self.totalAdjustment
-                               for j in self.x], '--')[0].get_color()
-        self.colors.append(ColorConverter().to_rgb(color))
+        self.ui.results.append("line: " + "m = " + str(popt[0]) + ", b = "
+                               + str(popt[1]))
+        gaussPlot, = self.axes.plot([popt[0]*j + popt[1] + self.totalAdjustment
+                               for j in self.x], '--')
+        self.gaussPlots.append(gaussPlot)
+        self.colors.append(ColorConverter().to_rgb(gaussPlot.get_color()))
         
         # Print and plot the optimized gaussian fit(s)
         # Again, the first two elements were the line, and each gaussian is a
         # subsequent group of 3 elements (hence starting at index 2 and
         # incrementing by 3)
         for i in xrange(2, len(popt), 3):
-            self.ui.results.append("gaussian " + str(i//3) + ": center = " + str(popt[i])
-                   + ", amplitude = " + str(popt[i+1]) + ", width = "
-                   + str(popt[i+2]))
-            color = self.axes.plot([gaussian(j, popt[i], popt[i + 2], popt[i + 1])
-                    + self.totalAdjustment for j in self.x], '--')[0].get_color()
-            self.colors.append(ColorConverter().to_rgb(color))
+            self.ui.results.append("gaussian " + str(i//3) + ": center = " 
+                   + str(popt[i]) + ", amplitude = " + str(popt[i+1]) 
+                   + ", width = " + str(popt[i+2]))
+            gaussPlot, = self.axes.plot([gaussian(j, popt[i], popt[i + 2],
+                         popt[i + 1]) + self.totalAdjustment for j in self.x],
+                         '--')
+            self.gaussPlots.append(gaussPlot)
+            self.colors.append(ColorConverter().to_rgb(gaussPlot.get_color()))
         
         if not isGuess:
             fit = genGaussSum(self.x, *popt)
@@ -126,6 +152,7 @@ class GaussianUi(QtGui.QMainWindow):
             self.x = range(0, len(self.ampList))
             
             self.cleanAndPlotData()
+            self.ui.numFits.setCurrentIndex(0)
             self.getGuess()
             self.updateOptions(self.ui.numFits, 1, self.potentialPeaks + 1)
             self.updateOptions(self.ui.guessToEdit, 0, 
@@ -163,9 +190,7 @@ class GaussianUi(QtGui.QMainWindow):
         except (RuntimeError, AssertionError):
             self.ui.results.append("----------OPTIMIZATION NOT FOUND----------")
             QtGui.QMessageBox.information(self, "Unable to Find Optimized Fit",
-                                          "Auto detecting the pedestal or"
-                                          + " selecting a different number of "
-                                          + "Gaussians to fit might help")
+                                          "Try messing with the guess parameters")
         except AttributeError:
             QtGui.QMessageBox.information(self, "Error Getting Fit",
                                           "Please upload a Matlab XCor data file"
