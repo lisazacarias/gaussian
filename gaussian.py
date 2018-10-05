@@ -1,20 +1,19 @@
+#!/usr/local/lcls/package/python/current/bin/python
 from __future__ import division
 
 from gaussian_ui import Ui_XCORGaussianFit
-from PyQt4 import QtGui, QtCore
-
-from pylab import array, plt, floor, show
-from numpy import argsort, power, exp, zeros
-from scipy.io import loadmat
-from scipy.optimize import curve_fit
-from operator import itemgetter
-from sys import argv, exit
-from matplotlib.colors import ColorConverter
+from PyQt4 import QtGui
 
 from read_xcor_data import *
 
+import pyqtgraph as pg
+
+from PyQt4.QtGui import QGridLayout
+
 class GaussianUi(QtGui.QMainWindow):
     def __init__(self):
+        pg.setConfigOption('background', 'w')
+        pg.setConfigOption('foreground', 'k')
         QtGui.QMainWindow.__init__(self)
         self.ui = Ui_XCORGaussianFit()
         self.ui.setupUi(self)
@@ -27,8 +26,13 @@ class GaussianUi(QtGui.QMainWindow):
         self.ui.heightSlider.valueChanged.connect(self.changeGaussAmp)
         self.ui.centerSlider.valueChanged.connect(self.changeGaussCenter)
         self.ui.widthSlider.valueChanged.connect(self.changeGaussWidth)
+
+        self.plot = pg.PlotWidget()
+        layout = QGridLayout()
+        self.ui.gaussPlot.setLayout(layout)
+        layout.addWidget(self.plot)
+        self.plot.showGrid(True, True)
         
-        self.axes = self.ui.gaussPlot.canvas.fig.add_subplot(111, axisbg='white')
         self.useZeros = not self.ui.filterPedestal.isChecked()
         
         self.changeStates(False)
@@ -87,9 +91,10 @@ class GaussianUi(QtGui.QMainWindow):
     
     def cleanAndPlotData(self):
         self.ui.results.clear()
-        self.axes.clear()
-        self.axes.plot(self.ampList, '.', marker='o')
-        self.ui.gaussPlot.canvas.draw()
+        self.plot.clear()
+        data = pg.ScatterPlotItem(range(0, len(self.ampList)),
+                                        self.ampList, symbol='o', size=5)
+        self.plot.addItem(data)
     
     def updateOptions(self, comboBox, start, end):
         comboBox.clear()
@@ -100,18 +105,19 @@ class GaussianUi(QtGui.QMainWindow):
         self.colors = []
         self.gaussPlots = []
     
-        self.ui.results.append("adjustment: " + str(self.totalAdjustment))
+        self.ui.results.append("vertical offset: " + str(self.totalAdjustment))
                                
         # Print and plot the optmized line fit.
-        # Note that popt has the same format as the guess, meaning that the first
-        # two parameters are the m and b of the line, respectively
+        # Note that popt has the same format as the guess, meaning that the
+        # first two parameters are the m and b of the line, respectively
         self.ui.results.append("line: " + "m = " + str(popt[0]) + ", b = "
                                + str(popt[1]))
-        gaussPlot, = self.axes.plot([popt[0]*j + popt[1] + self.totalAdjustment
-                               for j in self.x], '--')
-        self.gaussPlots.append(gaussPlot)
-        self.colors.append(ColorConverter().to_rgb(gaussPlot.get_color()))
-        
+        line = pg.PlotCurveItem([popt[0]*j + popt[1] + self.totalAdjustment
+                                      for j in self.x],
+                                pen=pg.mkPen(style=pg.QtCore.Qt.DotLine, width=3))
+        self.plot.addItem(line)
+        self.gaussPlots.append(line)
+
         # Print and plot the optimized gaussian fit(s)
         # Again, the first two elements were the line, and each gaussian is a
         # subsequent group of 3 elements (hence starting at index 2 and
@@ -120,18 +126,19 @@ class GaussianUi(QtGui.QMainWindow):
             self.ui.results.append("gaussian " + str(i//3) + ": center = " 
                    + str(popt[i]) + ", amplitude = " + str(popt[i+1]) 
                    + ", width = " + str(popt[i+2]))
-            gaussPlot, = self.axes.plot([gaussian(j, popt[i], popt[i + 2],
-                         popt[i + 1]) + self.totalAdjustment for j in self.x],
-                         '--')
+            gaussPlot = pg.PlotCurveItem([gaussian(j, popt[i], popt[i + 2],
+                                                   popt[i + 1])
+                                          + self.totalAdjustment for j in self.x],
+                                         pen=pg.mkPen(style=pg.QtCore.Qt.DotLine,
+                                                      width=3))
             self.gaussPlots.append(gaussPlot)
-            self.colors.append(ColorConverter().to_rgb(gaussPlot.get_color()))
-        
+            self.plot.addItem(gaussPlot)
+
         if not isGuess:
             fit = genGaussSum(self.x, *popt)
-            self.axes.plot(fit + self.totalAdjustment, linewidth=2)
-            
-        self.ui.gaussPlot.canvas.draw()
-    
+            self.plot.addItem(pg.PlotCurveItem(fit + self.totalAdjustment,
+                                               pen=pg.mkPen(width=3)))
+
     def printError(self):
         QtGui.QMessageBox.warning(self, "Error Loading File",
                                   "Please choose a valid Matlab file")
@@ -183,8 +190,11 @@ class GaussianUi(QtGui.QMainWindow):
         try:
             self.fit = getFit(self.data, self.x, self.guess)
             checkBounds(self.fit, self.data, self.x)
-            self.axes.clear()
-            self.axes.plot(self.ampList, '.', marker='o')
+            self.plot.clear()
+            data = pg.ScatterPlotItem(range(0, len(self.ampList)),
+                                      self.ampList, symbol='o', size=5)
+            self.plot.addItem(data)
+
             self.ui.results.append("----------RESULT----------")
             self.plotFit(self.fit, False)
         except (RuntimeError, AssertionError):

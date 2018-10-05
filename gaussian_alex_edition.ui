@@ -14,7 +14,7 @@
    <string>Multi Gaussian Fitting</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="MplWidget" name="gaussPlot" native="true">
+   <widget class="QWidget" name="gaussPlot" native="true">
     <property name="geometry">
      <rect>
       <x>430</x>
@@ -226,19 +226,6 @@
       <bool>true</bool>
      </property>
     </widget>
-    <zorder>heightSlider</zorder>
-    <zorder>centerSlider</zorder>
-    <zorder>label_3</zorder>
-    <zorder>guessToEdit</zorder>
-    <zorder>label</zorder>
-    <zorder>label_4</zorder>
-    <zorder>label_2</zorder>
-    <zorder>label_5</zorder>
-    <zorder>widthSlider</zorder>
-    <zorder>numFits</zorder>
-    <zorder>label_7</zorder>
-    <zorder>uploadButton</zorder>
-    <zorder>filterPedestal</zorder>
    </widget>
    <widget class="QGroupBox" name="groupBox_2">
     <property name="geometry">
@@ -294,14 +281,6 @@
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>MplWidget</class>
-   <extends>QWidget</extends>
-   <header>mpl_widget.h</header>
-   <container>1</container>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections/>
 </ui>
