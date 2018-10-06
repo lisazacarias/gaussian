@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>914</width>
-    <height>712</height>
+    <width>908</width>
+    <height>802</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -207,7 +207,7 @@
       </rect>
      </property>
      <property name="text">
-      <string>Upload XCor Fiile</string>
+      <string>Upload XCor File</string>
      </property>
     </widget>
     <widget class="QCheckBox" name="filterPedestal">
@@ -233,7 +233,7 @@
       <x>20</x>
       <y>480</y>
       <width>871</width>
-      <height>201</height>
+      <height>251</height>
      </rect>
     </property>
     <property name="title">
@@ -245,7 +245,7 @@
        <x>10</x>
        <y>20</y>
        <width>851</width>
-       <height>171</height>
+       <height>221</height>
       </rect>
      </property>
     </widget>
@@ -265,7 +265,7 @@
      </font>
     </property>
     <property name="text">
-     <string>Get Optimized Fit!</string>
+     <string>Get Optimized Fit</string>
     </property>
    </widget>
   </widget>
@@ -274,7 +274,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>914</width>
+     <width>908</width>
      <height>26</height>
     </rect>
    </property>

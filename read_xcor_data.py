@@ -35,7 +35,7 @@ def findMax(data, run):
 # The very ham-fisted way I'm coming up with a guess for the width of a given
 # peak is to get the literal distance between the first element of the
 # subsequent run and the last element of the previous run
-def findWidths(peakIdxs, runs, runMap):
+def findWidths(xdata, peakIdxs, runs, runMap):
     widths = []
     for peakIdx in peakIdxs:
         runIdx = runMap[peakIdx]
@@ -43,15 +43,16 @@ def findWidths(peakIdxs, runs, runMap):
         # If it's the first run, just double the distance between the peak and
         # the first element of the next run
         if runIdx == 0:
-            widths.append((runs[1][0] - peakIdx)*2)
+            widths.append((xdata[runs[1][0]] - xdata[peakIdx])*2)
         
         # If it's the last run, just double the distance between the peak and
         # the last element of the previous run
         elif runIdx == len(runs)-1:
-            widths.append((peakIdx - runs[-2][-1])*2)
+            widths.append((xdata[peakIdx] - xdata[runs[-2][-1]])*2)
         
         else:
-            widths.append(runs[runIdx+1][0] - runs[runIdx-1][-1])
+            widths.append(xdata[runs[runIdx+1][0]] - xdata[runs[runIdx-1][-1]])
+
     return widths
 
 # Modified from StackOverflow
@@ -76,7 +77,7 @@ def getSlope(x1, y1, x2, y2):
     
 # Idea to add a line instead of a really short, fat gaussian was all Ahemd.
 # Thanks, yo. You're great.
-def findLine(zeroRuns, runs, data):
+def findLine(zeroRuns, runs, xdata, ydata):
     x1, y1, x2, y2, m, b = (0, 0, 0, 0, 0, 0)
 
     # This condition should only be possible if there are peaks on one or both 
@@ -84,8 +85,9 @@ def findLine(zeroRuns, runs, data):
     if len(zeroRuns) == 1:
         zeroRun = runs[zeroRuns[0]]
         # This should pull out the median index value of the run
-        x1 = zeroRun[argsort(data[zeroRun])[len(zeroRun)/2]]
-        y1 = data[x1]
+        xInd1 = zeroRun[argsort(ydata[zeroRun])[len(zeroRun)/2]]
+        y1 = ydata[xInd1]
+
         return [m, y1]
         
     # 0 shouldn't be possible given that the data is normalized to the lowest 
@@ -97,15 +99,17 @@ def findLine(zeroRuns, runs, data):
         zero1 = runs[zeroRuns[0]]
         zero2 = runs[zeroRuns[-1]]
         
-        x1 = zero1[argsort(data[zero1])[len(zero1)/2]]
-        y1 = data[x1]
+        xInd1 = zero1[argsort(ydata[zero1])[len(zero1)/2]]
+        x1 = xdata[xInd1]
+        y1 = ydata[xInd1]
         
-        x2 = zero2[argsort(data[zero2])[len(zero2)/2]]
-        y2 = data[x2]
+        xInd2 = zero2[argsort(ydata[zero2])[len(zero2)/2]]
+        x2 = xdata[xInd2]
+        y2 = ydata[xInd2]
         
         m = getSlope(x1, y1, x2, y2)
         
-        return [m, y1-m*x1]        
+        return [m, y1-m*x1]
 
 # Every run has the potential to be a peak, but we limit it to the numPeaks
 # largest ones
@@ -233,13 +237,13 @@ def adjustData(data, step):
 # where m and b correspond to the line parameters in y = m*x + b
 # and every following group of three corresponds to a gaussian
 ################################################################################ 
-def getGuess(data, step, useZeros, numPeaks):
+def getGuess(xdata, ydata, step, useZeros, numPeaks):
 
-    runs, zeroRuns, nonZeroRuns, runMap = getRuns(data, step)
+    runs, zeroRuns, nonZeroRuns, runMap = getRuns(ydata, step)
                 
-    peaks, peakIdx, maxInfo = (getPeaks(data, numPeaks, nonZeroRuns) 
+    peaks, peakIdx, maxInfo = (getPeaks(ydata, numPeaks, nonZeroRuns)
                         if not useZeros 
-                        else getPeaks(data, numPeaks, runs))
+                        else getPeaks(ydata, numPeaks, runs))
                         
     # Gross error handling for the case where the max val isn't detected as a
     # peak (making sure it's added to runs in the correct order)
@@ -255,21 +259,21 @@ def getGuess(data, step, useZeros, numPeaks):
         for idx in peakIdx:
             plt.axvline(x=idx)
 
-    widths = findWidths(peakIdx, runs, runMap)
+    widths = findWidths(xdata, peakIdx, runs, runMap)
     
-    guess = findLine(zeroRuns, runs, data)
+    guess = findLine(zeroRuns, runs, xdata, ydata)
     
     # This plots my guess for the line
     if DEBUG:
-        plt.plot([guess[0]*j + guess[1] for j in xrange(0, len(data))], '--')
+        plt.plot([guess[0]*j + guess[1] for j in xdata], '--')
 
     for idx, amp in enumerate(peaks):
-        guess += [peakIdx[idx], amp, widths[idx]/4]
+        guess += [xdata[peakIdx[idx]], amp, widths[idx]/4]
         
         # Plot my initial guesses for the gaussian(s)
         if DEBUG:
-            plt.plot([gaussian(i, peakIdx[idx], widths[idx]/4, amp)
-                    for i in xrange(0,len(data))], '--')
+            plt.plot([gaussian(i, xdata[peakIdx[idx]], widths[idx]/4, amp)
+                    for i in xdata], '--')
     
     return [guess, len(runs) if useZeros else len(nonZeroRuns)]
     
@@ -364,7 +368,7 @@ if __name__ == "__main__":
     
     data, totalAdjustment, step = processData(ampList)
     
-    guess = getGuess(data, step, False, numPeaks)[0]
+    guess = getGuess(x, data, step, False, numPeaks)[0]
     
     if DEBUG:
         print "----------DEBUG MODE----------"
