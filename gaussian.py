@@ -73,7 +73,7 @@ class GaussianUi(QtGui.QMainWindow):
         self.guess[offset + 3*gauss] = val
         self.cleanAndPlotData()
         self.ui.results.append("----------GUESS----------")
-        self.plotFit(self.guess, True)
+        self.plotFit(self.guess)
         self.ui.results.append("")
 
     def changeGaussAmp(self):
@@ -144,7 +144,7 @@ class GaussianUi(QtGui.QMainWindow):
         for i in xrange(start, end):
             comboBox.addItem(str(i))
         
-    def plotFit(self, popt, isGuess):
+    def plotFit(self, popt):
         self.ui.results.append("vertical offset: " + str(self.totalAdjustment))
                                
         # Print and plot the optmized line fit.
@@ -232,7 +232,7 @@ class GaussianUi(QtGui.QMainWindow):
                                                        self.useZeros, self.numPeaks)
 
             self.ui.results.append("----------GUESS----------")
-            self.plotFit(self.guess, True)
+            self.plotFit(self.guess)
         except IndexError:
             QtGui.QMessageBox.warning(self, "Error Detecting Gaussians",
                                       "Unable to fit data - Try another file")
@@ -246,15 +246,16 @@ class GaussianUi(QtGui.QMainWindow):
             self.plot.addItem(data)
 
             self.ui.results.append("----------RESULT----------")
-            self.plotFit(self.fit, False)
+            self.plotFit(self.fit)
         except (RuntimeError, AssertionError):
             self.ui.results.append("----------OPTIMIZATION NOT FOUND----------")
             QtGui.QMessageBox.information(self, "Unable to Find Optimized Fit",
-                                          "Try messing with the guess parameters")
+                                          "Try messing with the guess "
+                                          "parameters")
         except AttributeError:
             QtGui.QMessageBox.information(self, "Error Getting Fit",
-                                          "Please upload a Matlab XCor data file"
-                                          + " to fit")
+                                          "Please upload a Matlab XCor data "
+                                          "file to fit")
     
 if __name__ == "__main__":
     app = QtGui.QApplication(argv)
